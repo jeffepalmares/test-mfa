@@ -1,0 +1,17 @@
+{
+  "name": "one-k-with-amazon-cognito",
+  "version": "0.0.1",
+  "description": "Node app to demonestrate One K MFA integration with Cognito",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "amazon-cognito-identity-js": "^5.2.10",
+    "express": "^4.18.1",
+    "hbs": "^4.2.0"
+  },
+  "engines": {
+    "node": "8.x"
+  }
+}

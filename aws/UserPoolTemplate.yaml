@@ -1,0 +1,174 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Parameters:
+  kosmosClienteId:
+    Type: String
+    Description: Kosmos Client ID
+    NoEcho: true
+  kosmosSecretId:
+    Type: String
+    Description: Kosmos secret key
+    NoEcho: true
+  kosmosTenant:
+    Type: String
+    Description: Kosmos Tenant
+    NoEcho: true
+  kosmosCommunity:
+    Type: String
+    Description: Kosmos Community
+    NoEcho: true
+
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      UserPoolName: !Sub ${AWS::StackName}-UserPool
+      AutoVerifiedAttributes:
+        - email
+      LambdaConfig:
+        DefineAuthChallenge: !GetAtt DefineAuthChallenge.Arn
+        CreateAuthChallenge: !GetAtt CreateAuthChallenge.Arn
+        VerifyAuthChallengeResponse: !GetAtt VerifyAuthChallenge.Arn
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: my-app
+      GenerateSecret: false
+      UserPoolId: !Ref UserPool
+      ExplicitAuthFlows:
+        - ALLOW_CUSTOM_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      WriteAttributes:
+        - email
+        - name
+      ReadAttributes:
+        - email
+        - name
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource:
+                  - "*"
+
+  KosmosClientSecret:
+    Type: "AWS::SecretsManager::Secret"
+    Properties:
+      Name: !Sub ${AWS::StackName}-kosmos-keys
+      Description: Kosmos keys
+      SecretString: !Ref kosmosSecretId
+
+  KosmosKeysSecretPolicy:
+    Type: "AWS::SecretsManager::ResourcePolicy"
+    Properties:
+      SecretId: !Ref KosmosClientSecret
+      ResourcePolicy:
+        Version: 2012-10-17
+        Statement:
+          - Resource: "*"
+            Action: "secretsmanager:GetSecretValue"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt LambdaExecutionRole.Arn
+
+  DefineAuthChallenge:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-DefineAuthChallenge
+      Role: !GetAtt LambdaExecutionRole.Arn
+      CodeUri: s3://test-oidc-page/kosmos-mfa-cognito-define-auth-challenge.zip
+      Handler: index.handler
+      Runtime: nodejs12.x
+      MemorySize: 1024
+      Timeout: 30
+      Tracing: Active
+  DefineAuthChallengePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt DefineAuthChallenge.Arn
+      Principal: cognito-idp.amazonaws.com
+      Action: lambda:InvokeFunction
+      SourceArn: !GetAtt UserPool.Arn
+
+  CreateAuthChallenge:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-CreateAuthChallenge
+      Role: !GetAtt LambdaExecutionRole.Arn
+      CodeUri: s3://test-oidc-page/kosmos-mfa-cognito-create-auth-challenge.zip
+      Handler: index.handler
+      Runtime: nodejs12.x
+      MemorySize: 1024
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          ONEK_TENANT: !Ref kosmosTenant
+          ONEK_COMMUNITY: !Ref kosmosCommunity
+          ONEK_CLIENTID: !Ref kosmosClienteId
+          ONEK_ACR: "'liveID push','otp sms','otp email','otp'"
+          ONEK_STATE: state123
+  CreateAuthChallengePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt CreateAuthChallenge.Arn
+      Principal: cognito-idp.amazonaws.com
+      Action: lambda:InvokeFunction
+      SourceArn: !GetAtt UserPool.Arn
+
+  VerifyAuthChallenge:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-VerifyAuthChallenge
+      Role: !GetAtt LambdaExecutionRole.Arn
+      CodeUri: s3://test-oidc-page/kosmos-mfa-cognito-verify-auth-challenge.zip
+      Handler: index.handler
+      Runtime: nodejs12.x
+      MemorySize: 1024
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          ONEK_SECRET_NAME: !Sub ${AWS::StackName}-kosmos-keys
+          ONEK_TENANT: !Ref kosmosTenant
+          ONEK_COMMUNITY: !Ref kosmosCommunity
+          ONEK_CLIENTID: !Ref kosmosClienteId
+  VerifyAuthChallengePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt VerifyAuthChallenge.Arn
+      Principal: cognito-idp.amazonaws.com
+      Action: lambda:InvokeFunction
+      SourceArn: !GetAtt UserPool.Arn
+
+Outputs:
+  UserPoolId:
+    Value: !Ref "UserPool"
+  AppClientID:
+    Value: !Ref "UserPoolClient"
