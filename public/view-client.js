@@ -7,8 +7,8 @@
  */
 
 var poolData = {
-  UserPoolId: "us-east-1_BQYhPmUz2",
-  ClientId: "6tu2b8inn4pmllk340eviglu45",
+  UserPoolId: "",
+  ClientId: "",
 };
 
 var userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);

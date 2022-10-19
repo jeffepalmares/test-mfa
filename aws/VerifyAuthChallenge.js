@@ -8,10 +8,10 @@
 const fetch = require("node-fetch");
 const aws = require("aws-sdk");
 
-let tenantDNS = process.env.ONEK_TENANT || "1k-dev.1kosmos.net",
-  communityName = process.env.ONEK_COMMUNITY || "default",
-  clientId = process.env.ONEK_CLIENTID || "1ba4be86606b2276b47a9711824cce7d",
-  secretName = process.env.ONEK_SECRET_NAME || "gdd",
+let tenantDNS = process.env.ONEK_TENANT,
+  communityName = process.env.ONEK_COMMUNITY,
+  clientId = process.env.ONEK_CLIENTID,
+  secretName = process.env.ONEK_SECRET_NAME,
   secretId;
 
 let smClient = new aws.SecretsManager({});
